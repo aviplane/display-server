@@ -1,22 +1,19 @@
 import sys  # nopep8
 
-sys.path.append("X:\\labscript\\analysis_scripts\\")  # nopep8
+sys.path.append("S:\\Schleier Lab Dropbox\\Cavity Lab Data\\Cavity Lab Scripts\\cavity_analysis")  # nopep8
 import readFiles as rf
 import AnalysisFunctions as af
 import time
 import zprocess
 from collections import Iterable
-# from labscript_utils import check_version
-# import labscript_utils.shared_drive
-# importing this wraps zlock calls around HDF file openings and closings:
-# import labscript_utils.h5_lock
+from time import sleep
 import h5py
 import numpy as np
 from pymba import Vimba
 import random, traceback
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+import threading
 import os
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
@@ -71,7 +68,9 @@ class Server(QObject):
                 self.transition_to_buffered(self._h5_filepath)
                 return 'done'
             elif request_data == 'done':
-                self.transition_to_static(self._h5_filepath)
+                plot_thread = threading.Thread(target = self.transition_to_static,
+                                               args = (self._h5_filepath, ))
+                plot_thread.start()
                 self._h5_filepath = None
                 return 'done'
             elif request_data == 'abort':
@@ -94,6 +93,7 @@ class Server(QObject):
 
     @pyqtSlot()
     def transition_to_static(self, h5_filepath):
+        sleep(2)
         for param in self.parameters:
             try:
                 data = rf.getdata(h5_filepath, param)
