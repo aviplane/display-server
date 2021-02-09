@@ -95,6 +95,7 @@ class Server(QObject):
     def transition_to_static(self, h5_filepath):
         sleep(2)
         for param in self.parameters:
+            #print(f"Extracting Data for {param}")
             try:
                 data = rf.getdata(h5_filepath, param)
             except Exception as e:
@@ -116,7 +117,8 @@ class Server(QObject):
                 n = hf.attrs['run number']
                 rep = hf.attrs['run repeat'] if 'run repeat' in hf.attrs else 0
             variables, values, units = af.get_xlabel_single_shot(h5_filepath)
-            print(variables, values)
+
+            #print(variables, values)
             for value in values:
                 if isinstance(value, Iterable):
                     value = np.array(value)
@@ -269,6 +271,7 @@ class DisplayServer(QWidget):
     def make_plot(self, num, data):
         param = self.parameters[num]
         print(f"Plotting {param}")
+        print("Hi There, is this savings")
         try:
             if 'Manta' in param:
                 j = pg.ImageItem()
