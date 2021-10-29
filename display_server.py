@@ -1,5 +1,6 @@
 import sys  # nopep8
-
+sys.path.append("X:\\")
+import labscript_utils.h5_lock
 sys.path.append("S:\\Schleier Lab Dropbox\\Cavity Lab Data\\Cavity Lab Scripts\\cavity_analysis")  # nopep8
 import readFiles as rf
 import AnalysisFunctions as af
@@ -10,7 +11,8 @@ from time import sleep
 import h5py
 import numpy as np
 from pymba import Vimba
-import random, traceback
+import random
+import traceback
 import matplotlib.pyplot as plt
 import seaborn as sns
 import threading
@@ -22,13 +24,17 @@ from PyQt5.QtNetwork import *
 import pyqtgraph as pg
 from matplotlib import cm
 from PIL import Image
+import glob
 # ccheck_version('zprocess', '1.3.3', '3.0')
 import zmq
+import scipy.ndimage.measurements as imagemeas
 from matplotlib.figure import Figure
 from matplotlib.backends.qt_compat import QtCore, QtWidgets, is_pyqt5
 
-from matplotlib.backends.backend_qt5agg import (FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
+from matplotlib.backends.backend_qt5agg import (
+    FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 
+import matplotlib.patches as patches
 
 class Server(QObject):
     plot_made = pyqtSignal(int, np.ndarray)
@@ -68,8 +74,8 @@ class Server(QObject):
                 self.transition_to_buffered(self._h5_filepath)
                 return 'done'
             elif request_data == 'done':
-                plot_thread = threading.Thread(target = self.transition_to_static,
-                                               args = (self._h5_filepath, ))
+                plot_thread = threading.Thread(target=self.transition_to_static,
+                                               args=(self._h5_filepath, ))
                 plot_thread.start()
                 self._h5_filepath = None
                 return 'done'
@@ -84,7 +90,8 @@ class Server(QObject):
                 try:
                     self.abort()
                 except Exception as e:
-                    sys.stderr.write('Exception in self.abort() while handling another exception:\n{}\n'.format(str(e)))
+                    sys.stderr.write(
+                        'Exception in self.abort() while handling another exception:\n{}\n'.format(str(e)))
             self._h5_filepath = None
             raise
 
@@ -93,11 +100,12 @@ class Server(QObject):
 
     @pyqtSlot()
     def transition_to_static(self, h5_filepath):
-        sleep(2)
+        sleep(4)
         for param in self.parameters:
-            #print(f"Extracting Data for {param}")
+            print(f"Getting Data for {param}")
             try:
                 data = rf.getdata(h5_filepath, param)
+                print(f"data for {param} is {data}")
             except Exception as e:
                 data = [[1, 0], [0, 1]]
                 traceback.print_exc()
@@ -117,7 +125,6 @@ class Server(QObject):
                 n = hf.attrs['run number']
                 rep = hf.attrs['run repeat'] if 'run repeat' in hf.attrs else 0
             variables, values, units = af.get_xlabel_single_shot(h5_filepath)
-
             #print(variables, values)
             for value in values:
                 if isinstance(value, Iterable):
@@ -126,47 +133,47 @@ class Server(QObject):
                 ["{} - {} {}".format(variable, value * sf, name) for variable, value, (sf, name) in
                  zip(variables, values, units)])
             shot_string = "{}\n{}/{} - rep {}\n{}".format(tail,
-                                                      n + 1,
-                                                      n_runs,
-                                                      rep,
-                                                      variable_string)
+                                                          n + 1,
+                                                          n_runs,
+                                                          rep,
+                                                          variable_string)
             self.shot_name.emit(shot_string)
         except Exception as e:
             print("Error while generating shot name!")
             print(e)
         print('transition to static')
 
-
-
     def abort(self):
         print('abort')
 
+from scipy import ndimage as ndi
 
 class DisplayServer(QWidget):
     def __init__(self, port):
         super(DisplayServer, self).__init__()
         self.setWindowTitle("Display Server")
         self._h5_filepath = None
-        ### Generate colormaps
+        # Generate colormaps
         self.set_colors()
-        ### Default parameters
+        # Default parameters
         self.parameters = ['Manta223_MOTatoms', 'Manta223_Trapatoms', 'roiSum']
         self.server = Server(port=port, parameters=self.parameters)
-        ### Server GUI interaction
+        # Server GUI interaction
         self.server.plot_made.connect(self.update_plots)
         self.server.ixon_plot.connect(self.ixon_plot)
         self.server.shot_name.connect(self.set_shot_name)
-        ### Start server thread
+        # Start server thread
         self.thread = QThread()
         self.server.moveToThread(self.thread)
         self.thread.started.connect(self.server.mainloop)
         self.thread.start()
-        self.trap_location = np.load("G:/Shared drives/Cavity Drive/avikar/display_server/trap_location.npy")
+        self.trap_location = np.load(
+            "G:/Shared drives/Cavity Drive/avikar/display_server/trap_location.npy")
         self.layout = QGridLayout()
         self.set_up_gui()
 
         self.setLayout(self.layout)
-        self.image = np.flip(np.asarray(Image.open('G:\\My Drive\\SchleierLab\\avikar\\display_server\\dog2.png')),
+        self.image = np.flip(np.asarray(Image.open('C:\\Users\\QuantumEngineer\\Pictures\\otter.jpg')),
                              axis=0)
 
     def set_colors(self):
@@ -194,7 +201,7 @@ class DisplayServer(QWidget):
         self.titles = [QLabel(i) for i in self.parameters]
         self.mins = [QLabel("Min: ") for i in self.parameters]
         self.maxs = [QLabel("Max: ") for i in self.parameters]
-        ### Make text big so everybody can read it
+        # Make text big so everybody can read it
         self.font = QFont()
         self.font.setPointSize(24)
         for i in range(len(self.parameters)):
@@ -202,12 +209,13 @@ class DisplayServer(QWidget):
             self.maxs[i].setFont(self.font)
             self.titles[i].setFont(self.font)
         self.shot_name.setFont(self.font)
-        ### Add titles to layout
+        # Add titles to layout
         for i, title in enumerate(self.titles):
             self.layout.addWidget(title, 2 * i + 2, 0)
             self.layout.addWidget(self.mins[i], 2 * i + 2, 2)
             self.layout.addWidget(self.maxs[i], 2 * i + 2, 3)
-            self.layout.addWidget(pg.GraphicsLayoutWidget(), 2 * i + 3, 0, 1, 4)
+            self.layout.addWidget(
+                pg.GraphicsLayoutWidget(), 2 * i + 3, 0, 1, 4)
             plot = self.get_random_dog()
             widgetToUpdate = self.layout.itemAtPosition(2 * i + 3, 0).widget()
             try:
@@ -221,12 +229,13 @@ class DisplayServer(QWidget):
             except Exception as e:
                 print(e)
 
-        self.plot_widget = FigureCanvas(Figure(figsize=(4, 4), tight_layout=True))
+        self.plot_widget = FigureCanvas(
+            Figure(figsize=(4, 4), tight_layout=True))
         self._plot_ax = self.plot_widget.figure.subplots()
         self.layout.addWidget(self.plot_widget, 2, 4, len(self.titles) * 2, 2)
         self.ixon_min = QLineEdit()
         self.ixon_max = QLineEdit()
-        self.ixon_max.setText('4000')
+        self.ixon_max.setText('1000')
         self.ixon_min.setText('400')
 
         self.layout.addWidget(self.ixon_min, 1, 4, 1, 1)
@@ -253,16 +262,92 @@ class DisplayServer(QWidget):
         a.addItem(plot)
         return
 
+    def rotate_point(self, x, y, x0, y0, angle):
+        theta = np.radians(angle)
+
+        r = np.array(((np.cos(theta), -np.sin(theta)),
+                      (np.sin(theta),  np.cos(theta)) ))
+        r_vec = r @ np.array([x - x0, y - y0])
+        return np.array([x0, y0]) + r_vec
+
     @pyqtSlot(np.ndarray)
-    def ixon_plot(self, data):
+    def ixon_plot(self, data, plot_roi: bool=True):
         vmin = self.ixon_min.text()
         vmax = self.ixon_max.text()
         vmin = None if vmin == '' else int(vmin)
         vmax = None if vmin == '' else int(vmax)
         self._plot_ax.cla()
-        self._plot_ax.imshow(data, aspect="auto", vmin=vmin, vmax=vmax, interpolation = None)
+        if plot_roi:
+            rotangle=-45.5  # in degrees
+
+            numStates=5
+            num_states = numStates
+
+            # rotangle, xshift, yshift, length, height, x_start, y_start = af.rotangle, af.xshift, af.yshift, af.length, af.height, af.x_start, af.y_start #lol w h y
+            rotangle, xshift, yshift, length, height, x_start, y_start, remaining_offset, lattice_height, lattice_center = af.load_roi_parameters()
+            n_traps, trap_width, trap_start, trap_distance = af.load_trap_parameters()
+            bottomROIx, bottomROIy = np.array([x_start, x_start + length]), np.array([y_start, y_start + height])
+
+            xpts = np.floor(np.array([bottomROIx + i * xshift  for i in range(num_states)]))
+            ypts = np.floor(np.array([bottomROIy + i * yshift - (i > 0) * remaining_offset for i in range(num_states)]))
+            xROIlen, yROIlen=np.ptp(bottomROIx), np.ptp(bottomROIy)
+
+            # image=ndi.rotate(data, rotangle, order=0)
+            self._plot_ax.imshow(data.squeeze(), aspect="auto", vmin=vmin,
+                                 vmax=vmax, interpolation=None)
+            # bottomROIx, bottomROIy=np.array([x_start, x_start + length]), np.array([y_start, y_start+height])
+            # xpts=np.array([bottomROIx + i * xshift for i in range(numStates)])
+            # ypts=np.array([bottomROIy + i * yshift for i in range(numStates)])
+            # xROIlen, yROIlen=np.ptp(bottomROIx), np.ptp(bottomROIy)
+            # rects=[patches.Rectangle((xpts[i, 0], ypts[i, 0]), xROIlen, yROIlen,
+            #                          linewidth=1, ls = '--', edgecolor='white', facecolor='none')
+            #        for i in range(numStates)]
+            #
+            # #n_traps, trap_width, trap_start, trap_distance
+            #
+            # for i in range(num_states):
+            #     for trap in np.arange(af.n_traps, dtype = int):
+            #         self._plot_ax.plot([xpts[i, 0] + af.trap_start + trap * af.trap_distance, xpts[i, 0] + af.trap_start + trap * af.trap_distance], [ypts[i, 0], ypts[i, 0] + yROIlen], c="mintcream", ls = "-")
+            #
+            # for r in rects:
+            #     self._plot_ax.add_patch(r)
+
+
+            # State rectangles
+            rects=[patches.Rectangle(self.rotate_point(xpts[i, 0], ypts[i, 0], xpts[i, 0] + xROIlen/2,  ypts[i, 0] + yROIlen/2, rotangle), xROIlen, yROIlen,
+                                     linewidth=1, angle = rotangle, ls = '--', edgecolor='white', facecolor='none', alpha = 0.5)
+                   for i in range(num_states)]
+
+            # lattice lines
+            for i in range(num_states):
+                center =  xpts[i, 0] + xROIlen/2,  ypts[i, 0] + yROIlen/2
+                high_x_l, high_y_l = self.rotate_point(xpts[i, 0], ypts[i, 0],
+                                     *center, rotangle)
+                high_x_r, high_y_r = self.rotate_point(xpts[i, 0]+ xROIlen, ypts[i, 0],
+                                      *center, rotangle)
+                low_x_l, low_y_l = self.rotate_point(xpts[i, 0], ypts[i, 0] + yROIlen,
+                                     *center, rotangle)
+                low_x_r, low_y_r = self.rotate_point(xpts[i, 0]+ xROIlen, ypts[i, 0]+ yROIlen,
+                                      *center, rotangle)
+
+                rot_height = abs(high_y_r - low_y_l)
+
+            #     ax.plot([low_x_l, low_x_r], np.array([low_y_l, low_y_r]), c = 'w', ls = '-')
+                self._plot_ax.plot([high_x_l, high_x_r], np.array([high_y_l, high_y_r]) + (lattice_center - lattice_height/2)/rot_height * height, c = 'w', ls = '-', alpha = 0.4)
+                self._plot_ax.plot([high_x_l, high_x_r], np.array([high_y_l, high_y_r]) + (lattice_center + lattice_height/2)/rot_height * height, c = 'w', ls = '-', alpha= 0.4)
+
+                for trap in np.arange(n_traps, dtype = int):
+                    y_slope = (high_y_l - high_y_r)/n_traps
+                    self._plot_ax.plot([high_x_l + trap_start + trap * trap_distance, low_x_l + trap_start + trap * trap_distance],
+                            np.array([high_y_l, low_y_l]) - y_slope * trap, c="mintcream", ls = ":", alpha = 0.4)
+
+            for r in rects:
+                self._plot_ax.add_patch(r)
+
+        self._plot_ax.set_ylim(1024, 0)
         self._plot_ax.set_title(np.max(data))
         self._plot_ax.figure.canvas.draw()
+
 
     @pyqtSlot(str)
     def set_shot_name(self, string):
@@ -271,19 +356,23 @@ class DisplayServer(QWidget):
     def make_plot(self, num, data):
         param = self.parameters[num]
         print(f"Plotting {param}")
-        print("Hi There, is this savings")
         try:
             if 'Manta' in param:
                 j = pg.ImageItem()
                 max_val = np.max(data)
+                min_val = np.min(data)
                 if '223_MOT' in param:
                     data = data[700:1100, 200:600]
                     max_val = np.max(data[100:300, 100:300])
                 if '145_MOT' in param:
                     data = data[600:1000, 300:800]
                 if '223_Trap' in param:
-                    data = np.int32(data.squeeze()) - np.int32(self.trap_location.T)
+                    data = np.int32(data.squeeze())
+                    data = data[600:800, 400:500]
                     max_val = np.max(data)
+                if '145_Raman' in param:
+                    data = np.clip(data, 14, None) - 14
+                    min_val, max_val = imagemeas.center_of_mass(data)
                 try:
                     print(np.min(data), np.max(data), param)
                     j.setImage(
@@ -295,11 +384,17 @@ class DisplayServer(QWidget):
                     print(e)
                     j = self.get_random_dog()
                     return j, 0, 0
-                return j, np.min(data), max_val
+                return j, min_val, max_val
             if 'SPCM' in param:
                 dat = np.diff(data)
                 i = pg.PlotDataItem(dat)
                 return i, np.min(dat), np.max(dat)
+            if 'Rigol' in param:
+                print(f"Plotting Rigol Data = {data} with length {len(data)}")
+                data = data[:-1]  # last point is usually strange/an artifact
+                data = np.round(np.array(data), 8)
+                i = pg.PlotDataItem(data)
+                return i, np.min(data), np.max(data)
             if "ProbeErr" in param:
                 data = [i[1] for i in data]
                 i = pg.PlotDataItem(data)
@@ -314,10 +409,10 @@ class DisplayServer(QWidget):
                 if "Magnetization" in param:
                     levels = (-1, 1)
                 j = pg.PlotDataItem(data)
-                #pg.ImageItem()
+                # pg.ImageItem()
                 #j.setImage(image=data, levels=levels, lut=self.cmap.getLookupTable(mode='float'))
-                #j.setLookupTable(self.cmap.getLookupTable())
-                return j, np.min(data), np.mean(data[:800])#np.max(data)
+                # j.setLookupTable(self.cmap.getLookupTable())
+                return j, np.min(data), np.mean(data[:800])  # np.max(data)
         except Exception as e:
             traceback.print_exc()
             j = self.get_random_dog()
@@ -325,10 +420,12 @@ class DisplayServer(QWidget):
         return
 
     def get_random_dog(self):
-        path = 'G:\\My Drive\\SchleierLab\\avikar\\display_server\\'
-        images = ['dog2.png', 'angel_of_hope3.png', 'rudy4.jpg', 'rudy5.jpg', 'rudy6.jpg']
-        self.image = np.flip(np.asarray(Image.open(path + random.choice(images))),
+        path = 'C:\\Users\\QuantumEngineer\\Pictures\\'
+        images = glob.glob(path + "*.jpg")
+        print(images)
+        self.image = np.flip(np.asarray(Image.open(random.choice(images))),
                              axis=0)
+        print(images)
         j = pg.ImageItem(self.image, axisOrder='row-major')
         return j
 
