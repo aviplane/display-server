@@ -100,12 +100,11 @@ class Server(QObject):
 
     @pyqtSlot()
     def transition_to_static(self, h5_filepath):
-        sleep(4)
+        sleep(0.1)
         for param in self.parameters:
             print(f"Getting Data for {param}")
             try:
                 data = rf.getdata(h5_filepath, param)
-                print(f"data for {param} is {data}")
             except Exception as e:
                 data = [[1, 0], [0, 1]]
                 traceback.print_exc()
@@ -156,7 +155,7 @@ class DisplayServer(QWidget):
         # Generate colormaps
         self.set_colors()
         # Default parameters
-        self.parameters = ['Manta223_MOTatoms', 'Manta223_Trapatoms', 'roiSum']
+        self.parameters = ['Manta223_MOTatoms', 'GreyCavityTransmissionBare', 'roiSum']
         self.server = Server(port=port, parameters=self.parameters)
         # Server GUI interaction
         self.server.plot_made.connect(self.update_plots)
@@ -182,7 +181,6 @@ class DisplayServer(QWidget):
         self.lut = (colormap._lut).view(np.ndarray)
         pos = np.linspace(0, 1, len(self.lut))
         self.cmap = pg.ColorMap(pos[:-2], self.lut[:-2])
-        # print self.cmap.getLookupTable(mode = 'float')
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Return:
@@ -295,22 +293,6 @@ class DisplayServer(QWidget):
             # image=ndi.rotate(data, rotangle, order=0)
             self._plot_ax.imshow(data.squeeze(), aspect="auto", vmin=vmin,
                                  vmax=vmax, interpolation=None)
-            # bottomROIx, bottomROIy=np.array([x_start, x_start + length]), np.array([y_start, y_start+height])
-            # xpts=np.array([bottomROIx + i * xshift for i in range(numStates)])
-            # ypts=np.array([bottomROIy + i * yshift for i in range(numStates)])
-            # xROIlen, yROIlen=np.ptp(bottomROIx), np.ptp(bottomROIy)
-            # rects=[patches.Rectangle((xpts[i, 0], ypts[i, 0]), xROIlen, yROIlen,
-            #                          linewidth=1, ls = '--', edgecolor='white', facecolor='none')
-            #        for i in range(numStates)]
-            #
-            # #n_traps, trap_width, trap_start, trap_distance
-            #
-            # for i in range(num_states):
-            #     for trap in np.arange(af.n_traps, dtype = int):
-            #         self._plot_ax.plot([xpts[i, 0] + af.trap_start + trap * af.trap_distance, xpts[i, 0] + af.trap_start + trap * af.trap_distance], [ypts[i, 0], ypts[i, 0] + yROIlen], c="mintcream", ls = "-")
-            #
-            # for r in rects:
-            #     self._plot_ax.add_patch(r)
 
 
             # State rectangles
@@ -358,11 +340,11 @@ class DisplayServer(QWidget):
         print(f"Plotting {param}")
         try:
             if 'Manta' in param:
+                data = np.squeeze(data)
                 j = pg.ImageItem()
                 max_val = np.max(data)
                 min_val = np.min(data)
                 if '223_MOT' in param:
-                    data = data[700:1100, 200:600]
                     max_val = np.max(data[100:300, 100:300])
                 if '145_MOT' in param:
                     data = data[600:1000, 300:800]
@@ -376,10 +358,8 @@ class DisplayServer(QWidget):
                 try:
                     print(np.min(data), np.max(data), param)
                     j.setImage(
-                        image=data,
-                        levels=(np.min(data) - 5, np.max(data) + 5),
-                        lut=self.cmap.getLookupTable(mode='float'))
-                    j.setLookupTable(self.cmap.getLookupTable())
+                        image=data)
+                    j.setLevels([np.min(data) - 5, np.max(data) + 5])
                 except Exception as e:
                     print(e)
                     j = self.get_random_dog()
@@ -422,10 +402,8 @@ class DisplayServer(QWidget):
     def get_random_dog(self):
         path = 'C:\\Users\\QuantumEngineer\\Pictures\\'
         images = glob.glob(path + "*.jpg")
-        print(images)
         self.image = np.flip(np.asarray(Image.open(random.choice(images))),
                              axis=0)
-        print(images)
         j = pg.ImageItem(self.image, axisOrder='row-major')
         return j
 
