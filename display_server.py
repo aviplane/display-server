@@ -100,7 +100,7 @@ class Server(QObject):
 
     @pyqtSlot()
     def transition_to_static(self, h5_filepath):
-        sleep(0.1)
+        sleep(2.6)
         for param in self.parameters:
             print(f"Getting Data for {param}")
             try:
@@ -233,8 +233,8 @@ class DisplayServer(QWidget):
         self.layout.addWidget(self.plot_widget, 2, 4, len(self.titles) * 2, 2)
         self.ixon_min = QLineEdit()
         self.ixon_max = QLineEdit()
-        self.ixon_max.setText('1000')
-        self.ixon_min.setText('400')
+        self.ixon_max.setText('600')
+        self.ixon_min.setText('500')
 
         self.layout.addWidget(self.ixon_min, 1, 4, 1, 1)
         self.layout.addWidget(self.ixon_max, 1, 5, 1, 1)
@@ -274,6 +274,7 @@ class DisplayServer(QWidget):
         vmax = self.ixon_max.text()
         vmin = None if vmin == '' else int(vmin)
         vmax = None if vmin == '' else int(vmax)
+        vmax = max(vmin + 1, vmax)
         self._plot_ax.cla()
         if plot_roi:
             rotangle=-45.5  # in degrees
@@ -369,7 +370,7 @@ class DisplayServer(QWidget):
                 dat = np.diff(data)
                 i = pg.PlotDataItem(dat)
                 return i, np.min(dat), np.max(dat)
-            if 'Rigol' in param:
+            if 'Rigol' in param or 'ProbeLock' in param:
                 print(f"Plotting Rigol Data = {data} with length {len(data)}")
                 data = data[:-1]  # last point is usually strange/an artifact
                 data = np.round(np.array(data), 8)
