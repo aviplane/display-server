@@ -30,6 +30,11 @@ import zmq
 import scipy.ndimage.measurements as imagemeas
 from matplotlib.figure import Figure
 from matplotlib.backends.qt_compat import QtCore, QtWidgets, is_pyqt5
+from os.path import getsize
+
+
+bad_data = [[1, 0], [0, 1]]
+
 
 from matplotlib.backends.backend_qt5agg import (
     FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
@@ -77,7 +82,7 @@ class Server(QObject):
                 plot_thread = threading.Thread(target=self.transition_to_static,
                                                args=(self._h5_filepath, ))
                 plot_thread.start()
-                self._h5_filepath = None
+                # self._h5_filepath = None
                 return 'done'
             elif request_data == 'abort':
                 self.abort()
@@ -100,15 +105,20 @@ class Server(QObject):
 
     @pyqtSlot()
     def transition_to_static(self, h5_filepath):
-        sleep(2.6)
+        counter = 0
+        while getsize(h5_filepath) < 4.2e6:
+            time.sleep(0.5)
+            counter += 1
+            if counter > 20:
+                return
+            print('wait')
+        print("transition to static", h5_filepath)
         for param in self.parameters:
-            print(f"Getting Data for {param}")
             try:
                 data = rf.getdata(h5_filepath, param)
             except Exception as e:
-                data = [[1, 0], [0, 1]]
+                data = bad_data
                 traceback.print_exc()
-                print("%s is not a valid parameter" % param)
             self.make_plot(param, data)
         try:
             ixon_data = rf.getdata(h5_filepath, "ixonatoms")
@@ -185,6 +195,7 @@ class DisplayServer(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Return:
             self.update_layout()
+
 
     def set_up_gui(self):
         # void QGridLayout::addWidget(QWidget *widget, int fromRow, int fromColumn, int rowSpan, int columnSpan, Qt::Alignment alignment = Qt::Alignment())
@@ -339,6 +350,9 @@ class DisplayServer(QWidget):
     def make_plot(self, num, data):
         param = self.parameters[num]
         print(f"Plotting {param}")
+        if np.all(data == bad_data):
+            j = self.get_random_dog()
+            return j, 0, 0
         try:
             if 'Manta' in param:
                 data = np.squeeze(data)
@@ -346,7 +360,8 @@ class DisplayServer(QWidget):
                 max_val = np.max(data)
                 min_val = np.min(data)
                 if '223_MOT' in param:
-                    max_val = np.max(data[100:300, 100:300])
+                    print(data.shape)
+                    max_val = np.max(data)
                 if '145_MOT' in param:
                     data = data[600:1000, 300:800]
                 if '223_Trap' in param:
